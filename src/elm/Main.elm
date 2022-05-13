@@ -3,7 +3,7 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html)
+import Html exposing (Html, s)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode as Decode
@@ -22,12 +22,20 @@ type alias Snake =
     { row : Int, column : Int }
 
 
+type Direction
+    = Left
+    | Bottom
+    | Right
+    | Top
+
+
 type alias Model =
     { gameStarted : Bool
     , lastUpdate : Int
     , time : Int
     , coloredSquare : Int
     , snake : List Snake
+    , direction : Direction
     }
 
 
@@ -35,7 +43,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 [ { row = 5, column = 5 }, { row = 6, column = 5 } ]
+                Model False time time 0 [ { row = 5, column = 5 }, { row = 6, column = 5 } ] Left
                     |> Update.none
            )
 
@@ -73,6 +81,74 @@ updateSquare ({ coloredSquare } as model) =
         |> modBy 5
         -- modBy is the operator modulo
         |> Setters.setColoredSquareIn model
+
+
+
+-- movingSnake : Model -> Model
+-- movingSnake model =
+--     case model.direction of
+--         Right ->
+--             model
+--         Left ->
+--             model
+--         Top ->
+--             model
+--         Bottom ->
+--             model
+
+
+instruction : Snake -> Int -> { a : Snake, val : Int }
+instruction snake number =
+    { a = snake, val = number }
+
+
+updateCell : Direction -> Snake -> Snake
+updateCell direction snake =
+    case direction of
+        Left ->
+            { snake
+                | row = snake.column - 1
+            }
+
+        Right ->
+            { snake
+                | row = snake.column + 1
+            }
+
+        Top ->
+            { snake
+                | row = snake.row - 1
+            }
+
+        Bottom ->
+            { snake
+                | row = snake.row + 1
+            }
+
+
+
+-- addInstruction : {a : Snake, val:Int} -> List {a : Snake, val:Int} -> List {a : Snake, val:Int}
+-- addInstruction newInst instructionList =
+--     case instructionList of
+--             [] -> instruction
+
+
+changeDirection : Key -> Model -> Model
+changeDirection key ({ snake, direction } as model) =
+    -- = let lastDirection = direction
+    -- in
+    case direction of
+        Right ->
+            model
+
+        Left ->
+            model
+
+        Top ->
+            model
+
+        Bottom ->
+            model
 
 
 updateSnake : Model -> Model
