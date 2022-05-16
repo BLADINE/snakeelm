@@ -7,7 +7,7 @@ import Html exposing (Html, button, text)
 import Html.Attributes as Attributes
 import Html.Events as Events exposing (onClick)
 import Json.Decode as Decode
-import Setters
+import Setters exposing (setColoredSquare)
 import Time exposing (Posix)
 import Update
 import Random exposing (Generator)
@@ -25,6 +25,13 @@ type alias Snake =
 type alias Bonus =
     { row : Int, column : Int, value : Int }
 
+type Direction
+    = Left
+    | Up
+    | Right
+    | Down
+
+
 type alias Model =
     { gameStarted : Bool
     , lastUpdate : Int
@@ -32,16 +39,44 @@ type alias Model =
     , coloredSquare : Int
     , snake : List Snake
     , bonus : Bonus
+    , currentDirection : Direction
+    , apple : Snake
+    , eatenAppleList : List Snake
+    , score : Int
     }
+
+
+initialSnake : List Snake
+initialSnake =
+    [ { row = 5, column = 5 }
+
+    -- , { row = 6, column = 5 }
+    -- , { row = 7, column = 5 }
+    -- , { row = 8, column = 5 }
+    ]
+
+
+initialApple : Snake
+initialApple =
+    { row = 4, column = 8 }
+
+
+initialEatenApple : List Snake
+initialEatenApple =
+    []
 
 
 init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 [ { row = 5, column = 5 }, { row = 6, column = 5 } ] {row = 0, column = 0, value = 0 }
+                Model False time time 0 initialSnake Left initialApple initialEatenApple 0
                     |> Update.none
            )
+
+
+
+-- [ { row = 5, column = 5 }, { row = 6, column = 5 } ]
 
 
 {-| All your messages should go there
@@ -91,31 +126,148 @@ updateSquare : Model -> Model
 updateSquare ({ coloredSquare } as model) =
     coloredSquare
         + 1
-        |> modBy 5
+        |> modBy 30
         -- modBy is the operator modulo
         |> Setters.setColoredSquareIn model
 
 
-updateSnake : Model -> Model
-updateSnake ({ snake } as model) =
+updateApple : Model -> Model
+updateApple ({ coloredSquare } as model) =
+    if coloredSquare == 0 then
+        let
+            newApple =
+                { row = 4, column = 8 }
+        in
+        { model | apple = newApple }
+
+    else if coloredSquare >= 20 then
+        { model | apple = { row = -1, column = -1 } }
+
+    else
+        model
+
+
+updateCell : Direction -> Snake -> Snake
+updateCell direction snake =
+    case direction of
+        Left ->
+            { snake
+                | row = snake.row - 1
+            }
+
+        Right ->
+            { snake
+                | row = snake.row + 1
+            }
+
+        Up ->
+            { snake
+                | column = snake.column - 1
+            }
+
+        --snake
+        Down ->
+            { snake
+                | column = snake.column + 1
+            }
+
+
+isAppleEaten : Snake -> Model -> Model
+isAppleEaten apple ({ snake, eatenAppleList } as model) =
     case snake of
         [] ->
             model
 
-        _ :: tl ->
-            let
-                value =
-                    List.map
-                        (\a ->
-                            if a.row == 1 then
-                                { a | row = 10 }
+        hd :: _ ->
+            if hd /= apple then
+                model
 
-                            else
-                                { a | row = a.row - 1 }
-                        )
-                        snake
+            else
+                let
+                    newEatenApple =
+                        List.singleton apple
+                            |> (++) eatenAppleList
+                in
+                { model
+                    | eatenAppleList = newEatenApple
+                    , apple = { row = -1, column = -1 }
+                    , score = model.score + 1
+                }
+
+
+growthSnake : Model -> Model
+growthSnake ({ snake, eatenAppleList } as model) =
+    case eatenAppleList of
+        [] ->
+            model
+
+        hd :: tl ->
+            let
+                lastCellSnake =
+                    List.length snake
+                        - 1
+                        |> flip List.drop snake
             in
-            { model | snake = value }
+            if List.length snake == 1 then
+                { model
+                    | snake = snake ++ List.singleton hd
+                    , eatenAppleList = tl
+                }
+
+            else if List.singleton hd == lastCellSnake then
+                { model
+                    | snake = snake ++ List.singleton hd
+                    , eatenAppleList = tl
+                }
+
+            else
+                model
+
+
+
+-- let
+--     newSnake =
+--         if tl == [] then
+--             List.singleton hd
+--                 |> (::) hd
+--         else
+--             List.length snake
+--                 - 1
+--                 |> flip List.drop snake
+--                 |> flip (++) snake
+-- in
+-- { model | snake = newSnake, apple = { row = -1, column = -1 } }
+
+
+updateSnake : Model -> Model
+updateSnake ({ snake, currentDirection } as model) =
+    case snake of
+        [] ->
+            model
+
+        hd :: _ ->
+            let
+                newSnake =
+                    if List.length snake == 1 then
+                        List.map (\a -> updateCell currentDirection a) snake
+
+                    else
+                        List.length snake
+                            - 1
+                            |> flip List.take snake
+                            |> (::) (updateCell currentDirection hd)
+
+                -- newSnake2 =
+                --     List.length snake
+                --         - 1
+                --         |> flip List.take snake
+                --         |> (::) (updateCell currentDirection hd)
+            in
+            -- if List.length snake == 1 then
+            --     { model | snake = newSnake1 }
+            -- else
+            --     { model | snake = newSnake2 }
+            { model | snake = newSnake }
 
 
 toggleGameLoop : Model -> ( Model, Cmd Msg )
@@ -125,14 +277,95 @@ toggleGameLoop ({ gameStarted } as model) =
         |> Update.none
 
 
+changeDirection : Direction -> Model -> Model
+changeDirection newDirection model =
+    -- case model.currentDirection of
+    --     Left -> if newDirection == Right then model
+    case model.currentDirection of
+        Left ->
+            if newDirection == Right then
+                model
+
+            else
+                { model | currentDirection = newDirection }
+
+        Right ->
+            if newDirection == Left then
+                model
+
+            else
+                { model | currentDirection = newDirection }
+
+        Up ->
+            if newDirection == Down then
+                model
+
+            else
+                { model | currentDirection = newDirection }
+
+        Down ->
+            if newDirection == Up then
+                model
+
+            else
+                { model | currentDirection = newDirection }
+
+
+endGame : Model -> Model
+endGame ({ snake } as model) =
+    let
+        isHitWallOrItself =
+            case snake of
+                [] ->
+                    True
+
+                hd :: tail ->
+                    if hd.row == -1 || hd.row == 20 || hd.column == -1 || hd.column == 20 then
+                        True
+
+                    else if List.member hd tail then
+                        True
+
+                    else
+                        False
+    in
+    if isHitWallOrItself then
+        { model
+            | snake = initialSnake
+            , gameStarted = False
+            , apple = initialApple
+            , eatenAppleList = []
+            , currentDirection = Left
+            , score = 0
+        }
+
+    else
+        model
+
+
 keyDown : Key -> Model -> ( Model, Cmd Msg )
 keyDown key model =
     case Debug.log "key" key of
         Space ->
             update ToggleGameLoop model
 
-        _ ->
-            Update.none model
+        -- utiliser la boucle ciclyque pour continuer a bouger le snake
+        ArrowLeft ->
+            Update.none (changeDirection Left model)
+
+        ArrowRight ->
+            Update.none (changeDirection Right model)
+
+        ArrowUp ->
+            Update.none (changeDirection Up model)
+
+        ArrowDown ->
+            Update.none (changeDirection Down model)
+
+
+
+-- _ ->
+--     Update.none model
 
 
 nextFrame : Posix -> Model -> ( Model, Cmd Msg )
@@ -141,9 +374,14 @@ nextFrame time model =
         time_ =
             Time.posixToMillis time
     in
-    if time_ - model.lastUpdate >= 1000 then
-        -- updateSquare model
-        updateSnake model
+    if time_ - model.lastUpdate >= 300 then
+        --1000
+        updateSquare model
+            |> updateApple
+            |> isAppleEaten model.apple
+            |> growthSnake
+            |> updateSnake
+            |> endGame
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
             |> Update.none
@@ -184,33 +422,30 @@ checkBonusInSnake bonus listSnake =
 
 {-| Manage all your view functions here.
 -}
-transform : Snake -> Int
-transform snakeElment =
-    --(snakeElment.row - 1) * 10 + snakeElment.column
-    0
-
-
-cell : Int -> Int -> Html msg
-cell index active =
-    let
-        class =
-            if active == index then
-                "cell active"
-
-            else
-                "cell"
-    in
-    Html.div [ Attributes.class class ] []
 
 
 
+-- transform : Snake -> Int
+-- transform snakeElment =
+--     --(snakeElment.row - 1) * 10 + snakeElment.column
+--     0
+-- cell : Int -> Int -> Html msg
+-- cell index active =
+--     let
+--         class =
+--             if active == index then
+--                 "cell active"
+--             else
+--                 "cell"
+--     in
+--     Html.div [ Attributes.class class ] []
 -- movingSnake : Model -> List (Html msg)
 -- movingSnake model =
 --     List.map (\a -> cell (transform a) model.coloredSquare) model.snake
 
 
-cellSnake : Snake -> Html msg
-cellSnake snake =
+cell : Snake -> String -> Html msg
+cell snake nameClass =
     let
         depRow =
             snake.row
@@ -223,19 +458,20 @@ cellSnake snake =
                 |> String.fromInt
     in
     Html.div
-        [ Attributes.style "position" "absolute"
-        , Attributes.style "width" "20px"
-        , Attributes.style "height" "20px"
-        , Attributes.style "left" (depRow ++ "px")
+        [ {- Attributes.style "position" "absolute"
+             , Attributes.style "width" "20px"
+             , Attributes.style "height" "20px"
+          -}
+          Attributes.style "left" (depRow ++ "px")
         , Attributes.style "top" (depHeight ++ "px")
-        , Attributes.class "cell"
+        , Attributes.class nameClass
         ]
         []
 
 
 movingSnake : Model -> List (Html msg)
 movingSnake { snake } =
-    List.map (\a -> cellSnake a) snake
+    List.map (\a -> cell a "snake") snake
 
 
 
@@ -243,22 +479,28 @@ movingSnake { snake } =
 
 
 movingSquare : Model -> Html msg
-movingSquare ({ coloredSquare } as model) =
+movingSquare ({ apple } as model) =
     Html.div [ Attributes.class "grid" ]
-        -- [ cell 0 coloredSquare
+        -- [ cell 1 coloredSquare
         -- , cell 1 coloredSquare
         -- , cell 2 coloredSquare
         -- , cell 3 coloredSquare
         -- , cell 4 coloredSquare
+        -- , cell 5 coloredSquare
+        -- , cell 6 coloredSquare
+        -- , cell 7 coloredSquare
+        -- , cell 8 coloredSquare
+        -- , cell 9 coloredSquare
         -- ]
         -- [ cellSnake { row = 1, column = 5 }
         -- , cell 0 coloredSquare
         -- ]
-        (movingSnake model)
-
-
-
---(movingSnake model)
+        --(movingSnake model)
+        -- if apple.row == -1 then cell apple "apple"
+        -- else
+        (cell apple "apple"
+            |> flip (::) (movingSnake model)
+        )
 
 
 actualTime : Model -> Html Msg
@@ -294,6 +536,14 @@ explanations ({ gameStarted } as model) =
         ]
 
 
+displayScore : Model -> Html msg
+displayScore { score } =
+    Html.div [ Attributes.class "score" ]
+        [ String.fromInt score
+            |> Html.text
+        ]
+
+
 {-| Main view functions, composing all functions in one
 -}
 view : Model -> Html Msg
@@ -302,6 +552,7 @@ view model =
         [ Html.img [ Attributes.src "/logo.svg" ] []
         , explanations model
         , movingSquare model
+        , displayScore model
         ]
 
 
