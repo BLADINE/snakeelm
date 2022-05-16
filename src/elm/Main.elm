@@ -70,7 +70,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 initialSnake Left initialApple initialEatenApple 0
+                Model False time time 0 initialSnake {row = 0, column =  0, value = 0} Left initialApple initialEatenApple 0
                     |> Update.none
            )
 
@@ -367,6 +367,9 @@ keyDown key model =
 -- _ ->
 --     Update.none model
 
+lauchDiceRoll : Model -> (Model, Cmd Msg)
+lauchDiceRoll model =
+  Update.withCmd newBonus model
 
 nextFrame : Posix -> Model -> ( Model, Cmd Msg )
 nextFrame time model =
@@ -384,7 +387,8 @@ nextFrame time model =
             |> endGame
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
-            |> Update.none
+            |> lauchDiceRoll
+            -- |> Update.none
 
     else
         time_
@@ -411,7 +415,7 @@ update msg model =
           if checkBonusInSnake (Debug.log "generated bonus" generatedBonus) model.snake then
             update GenerateBonus model
           else
-            model |> Update.none
+            { model | apple = generatedBonus } |> Update.none
 
         GenerateBonus ->
             ( model, newBonus )
