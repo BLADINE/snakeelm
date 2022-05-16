@@ -3,13 +3,14 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html)
+import Html exposing (Html, button, text)
 import Html.Attributes as Attributes
-import Html.Events as Events
+import Html.Events as Events exposing (onClick)
 import Json.Decode as Decode
 import Setters
 import Time exposing (Posix)
 import Update
+import Random exposing (Generator)
 
 
 {-| Got from JS side, and Model to modify
@@ -21,6 +22,8 @@ type alias Flags =
 type alias Snake =
     { row : Int, column : Int }
 
+type alias Bonus =
+    { row : Int, column : Int, value : Int }
 
 type alias Model =
     { gameStarted : Bool
@@ -28,6 +31,7 @@ type alias Model =
     , time : Int
     , coloredSquare : Int
     , snake : List Snake
+    , bonus : Bonus
     }
 
 
@@ -35,7 +39,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 [ { row = 5, column = 5 }, { row = 6, column = 5 } ]
+                Model False time time 0 [ { row = 5, column = 5 }, { row = 6, column = 5 } ] {row = 0, column = 0, value = 0 }
                     |> Update.none
            )
 
@@ -54,6 +58,8 @@ type Msg
     = NextFrame Posix
     | ToggleGameLoop
     | KeyDown Key
+    | GenerateBonus
+    | NewBonus Snake
 
 
 
@@ -66,6 +72,21 @@ type Msg
 -| subfunction. You can use the helpers in Update.elm to help construct
 -| Cmds.
 -}
+bonusConstructor : Random.Generator Snake
+bonusConstructor =
+  Random.map2
+    (\row column -> Snake row column)
+    (Random.int 5 7)
+    (Random.int 5 7)
+
+newBonus : Cmd Msg
+newBonus =
+  Random.generate NewBonus bonusConstructor
+
+-- updateBonus : Bonus -> Int -> Bonus
+-- updateBonus bonus random =
+--   { bonus | row = random, column = random }
+
 updateSquare : Model -> Model
 updateSquare ({ coloredSquare } as model) =
     coloredSquare
@@ -147,6 +168,19 @@ update msg model =
         NextFrame time ->
             nextFrame time model
 
+        NewBonus generatedBonus ->
+          let test = { row = 5, column = 5 } in
+          if checkBonusInSnake (Debug.log "generated bonus" generatedBonus) model.snake then
+            update GenerateBonus model
+          else
+            model |> Update.none
+
+        GenerateBonus ->
+            ( model, newBonus )
+
+checkBonusInSnake : Snake -> List Snake -> Bool
+checkBonusInSnake bonus listSnake =
+  List.member bonus listSnake
 
 {-| Manage all your view functions here.
 -}
@@ -227,10 +261,11 @@ movingSquare ({ coloredSquare } as model) =
 --(movingSnake model)
 
 
-actualTime : Model -> Html msg
+actualTime : Model -> Html Msg
 actualTime { time } =
     Html.div [ Attributes.class "actual-time" ]
         [ Html.text "Actual time"
+        , button [onClick GenerateBonus][text "generate random"]
         , time
             |> String.fromInt
             |> Html.text
