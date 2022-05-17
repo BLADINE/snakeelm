@@ -1,13 +1,16 @@
 module Main exposing (..)
 
+{- exposing (setColoredSquare) -}
+
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html)
+import Html exposing (Html, button, text)
 import Html.Attributes as Attributes
-import Html.Events as Events
+import Html.Events as Events exposing (onClick)
 import Json.Decode as Decode
-import Setters exposing (setColoredSquare)
+import Random exposing (Generator)
+import Setters
 import Time exposing (Posix)
 import Update
 
@@ -20,6 +23,10 @@ type alias Flags =
 
 type alias Snake =
     { row : Int, column : Int }
+
+
+type alias Bonus =
+    { row : Int, column : Int, value : Int }
 
 
 type Direction
@@ -39,6 +46,8 @@ type alias Model =
     , apple : Snake
     , eatenAppleList : List Snake
     , score : Int
+
+    -- , bonus : Bonus
     }
 
 
@@ -46,6 +55,7 @@ initialSnake : List Snake
 initialSnake =
     [ { row = 5, column = 5 }
 
+    --bonusConstructor
     -- , { row = 6, column = 5 }
     -- , { row = 7, column = 5 }
     -- , { row = 8, column = 5 }
@@ -89,9 +99,13 @@ type Msg
     = NextFrame Posix
     | ToggleGameLoop
     | KeyDown Key
+      --| NewApple
+    | GetApple Snake
 
 
 
+-- | GenerateBonus
+-- | NewBonus Snake
 -- type IntOrSnake
 --     = Int Int
 --     | Snake { row : Int, column : Int }
@@ -101,6 +115,24 @@ type Msg
 -| subfunction. You can use the helpers in Update.elm to help construct
 -| Cmds.
 -}
+generateApple : Random.Generator Snake
+generateApple =
+    -- Random.map2
+    --     (\row column -> Snake row column)
+    --     (Random.int 5 7)
+    --     (Random.int 5 7)
+    Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
+
+
+
+-- newBonus : Cmd Msg
+-- newBonus =
+--     Random.generate NewBonus bonusConstructor
+-- updateBonus : Bonus -> Int -> Bonus
+-- updateBonus bonus random =
+--     { bonus | row = random, column = random }
+
+
 updateSquare : Model -> Model
 updateSquare ({ coloredSquare } as model) =
     coloredSquare
@@ -110,12 +142,23 @@ updateSquare ({ coloredSquare } as model) =
         |> Setters.setColoredSquareIn model
 
 
-updateApple : Model -> Model
-updateApple ({ coloredSquare } as model) =
+executdeAppleCmd : Model -> ( Model, Cmd Msg )
+executdeAppleCmd model =
+    --Random.generate GetApple generateApple
+    generateApple
+        |> Random.generate GetApple
+        |> flip Update.withCmd model
+
+
+updateApple : Snake -> Model -> Model
+updateApple value ({ coloredSquare } as model) =
     if coloredSquare == 0 then
         let
             newApple =
-                { row = 4, column = 8 }
+                value
+
+            --{ row = 4, column = 8 }
+            --randomApple
         in
         { model | apple = newApple }
 
@@ -356,14 +399,16 @@ nextFrame time model =
     if time_ - model.lastUpdate >= 300 then
         --1000
         updateSquare model
-            |> updateApple
+            --|> updateApple
+            --|> GetApple
             |> isAppleEaten model.apple
             |> growthSnake
             |> updateSnake
             |> endGame
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
-            |> Update.none
+            --|> Update.none
+            |> executdeAppleCmd
 
     else
         time_
@@ -384,6 +429,36 @@ update msg model =
 
         NextFrame time ->
             nextFrame time model
+
+        -- NewApple ->
+        --     ( model, Random.generate GetApple generateApple )
+        GetApple value ->
+            updateApple value model |> Update.none
+
+
+
+--{ model | apple = value } |> Update.none
+-- NewApple row column ->
+--     model |> Update.none
+{- NewBonus generatedBonus ->
+       -- let
+       --     test =
+       --         { row = 5, column = 5 }
+       -- in
+       if checkBonusInSnake (Debug.log "generated bonus" generatedBonus) model.snake then
+           update GenerateBonus model
+
+       else
+           model |> Update.none
+
+   GenerateBonus ->
+       ( model, newBonus )
+-}
+
+
+checkBonusInSnake : Snake -> List Snake -> Bool
+checkBonusInSnake bonus listSnake =
+    List.member bonus listSnake
 
 
 {-| Manage all your view functions here.
@@ -469,10 +544,12 @@ movingSquare ({ apple } as model) =
         )
 
 
-actualTime : Model -> Html msg
+actualTime : Model -> Html Msg
 actualTime { time } =
     Html.div [ Attributes.class "actual-time" ]
         [ Html.text "Actual time"
+
+        --, button [ onClick GenerateBonus ] [ text "generate random" ]
         , time
             |> String.fromInt
             |> Html.text
