@@ -43,7 +43,7 @@ type alias Model =
     , coloredSquare : Int
     , snake : List Snake
     , currentDirection : Direction
-    , apple : Snake
+    , bonusApple : Snake
     , eatenAppleList : List Snake
     , score : Int
 
@@ -53,10 +53,10 @@ type alias Model =
 
 initialSnake : List Snake
 initialSnake =
-    [ { row = 5, column = 5 }
+    [ { row = 10, column = 5 }
 
     --bonusConstructor
-    -- , { row = 6, column = 5 }
+    --, { row = 11, column = 5 }
     -- , { row = 7, column = 5 }
     -- , { row = 8, column = 5 }
     ]
@@ -64,7 +64,7 @@ initialSnake =
 
 initialApple : Snake
 initialApple =
-    { row = 4, column = 8 }
+    { row = 5, column = 5 }
 
 
 initialEatenApple : List Snake
@@ -117,11 +117,7 @@ type Msg
 -}
 generateApple : Random.Generator Snake
 generateApple =
-    -- Random.map2
-    --     (\row column -> Snake row column)
-    --     (Random.int 5 7)
-    --     (Random.int 5 7)
-    Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
+    Random.map2 (\row column -> Snake row column) (Random.int 0 19) (Random.int 0 19)
 
 
 
@@ -160,10 +156,10 @@ updateApple value ({ coloredSquare } as model) =
             --{ row = 4, column = 8 }
             --randomApple
         in
-        { model | apple = newApple }
+        { model | bonusApple = newApple }
 
     else if coloredSquare >= 20 then
-        { model | apple = { row = -1, column = -1 } }
+        { model | bonusApple = { row = -1, column = -1 } }
 
     else
         model
@@ -212,7 +208,7 @@ isAppleEaten apple ({ snake, eatenAppleList } as model) =
                 in
                 { model
                     | eatenAppleList = newEatenApple
-                    , apple = { row = -1, column = -1 }
+                    , bonusApple = { row = -1, column = -1 }
                     , score = model.score + 1
                 }
 
@@ -300,37 +296,41 @@ toggleGameLoop ({ gameStarted } as model) =
 
 
 changeDirection : Direction -> Model -> Model
-changeDirection newDirection model =
+changeDirection newDirection ({ currentDirection, snake } as model) =
     -- case model.currentDirection of
     --     Left -> if newDirection == Right then model
-    case model.currentDirection of
-        Left ->
-            if newDirection == Right then
-                model
+    if List.length snake == 1 then
+        { model | currentDirection = newDirection }
 
-            else
-                { model | currentDirection = newDirection }
+    else
+        case currentDirection of
+            Left ->
+                if newDirection == Right then
+                    model
 
-        Right ->
-            if newDirection == Left then
-                model
+                else
+                    { model | currentDirection = newDirection }
 
-            else
-                { model | currentDirection = newDirection }
+            Right ->
+                if newDirection == Left then
+                    model
 
-        Up ->
-            if newDirection == Down then
-                model
+                else
+                    { model | currentDirection = newDirection }
 
-            else
-                { model | currentDirection = newDirection }
+            Up ->
+                if newDirection == Down then
+                    model
 
-        Down ->
-            if newDirection == Up then
-                model
+                else
+                    { model | currentDirection = newDirection }
 
-            else
-                { model | currentDirection = newDirection }
+            Down ->
+                if newDirection == Up then
+                    model
+
+                else
+                    { model | currentDirection = newDirection }
 
 
 endGame : Model -> Model
@@ -355,7 +355,7 @@ endGame ({ snake } as model) =
         { model
             | snake = initialSnake
             , gameStarted = False
-            , apple = initialApple
+            , bonusApple = initialApple
             , eatenAppleList = []
             , currentDirection = Left
             , score = 0
@@ -363,6 +363,17 @@ endGame ({ snake } as model) =
 
     else
         model
+
+
+gamePlay : Model -> Model
+gamePlay model =
+    updateSquare model
+        --|> updateApple
+        --|> GetApple
+        |> isAppleEaten model.bonusApple
+        |> growthSnake
+        |> updateSnake
+        |> endGame
 
 
 keyDown : Key -> Model -> ( Model, Cmd Msg )
@@ -401,10 +412,11 @@ nextFrame time model =
         updateSquare model
             --|> updateApple
             --|> GetApple
-            |> isAppleEaten model.apple
-            |> growthSnake
             |> updateSnake
+            |> isAppleEaten model.bonusApple
             |> endGame
+            |> growthSnake
+            --gamePlay model
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
             --|> Update.none
@@ -520,7 +532,7 @@ movingSnake { snake } =
 
 
 movingSquare : Model -> Html msg
-movingSquare ({ apple } as model) =
+movingSquare ({ bonusApple } as model) =
     Html.div [ Attributes.class "grid" ]
         -- [ cell 1 coloredSquare
         -- , cell 1 coloredSquare
@@ -539,8 +551,12 @@ movingSquare ({ apple } as model) =
         --(movingSnake model)
         -- if apple.row == -1 then cell apple "apple"
         -- else
-        (cell apple "apple"
-            |> flip (::) (movingSnake model)
+        (if bonusApple.row == -1 then
+            movingSnake model
+
+         else
+            cell bonusApple "apple"
+                |> flip (::) (movingSnake model)
         )
 
 
