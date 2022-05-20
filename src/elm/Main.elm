@@ -45,6 +45,7 @@ type alias Model =
     , currentDirection : Direction
     , apple : Snake
     , eatenAppleList : List Snake
+    , bonus : Bonus
     , score : Int
 
     -- , bonus : Bonus
@@ -66,6 +67,10 @@ initialApple : Snake
 initialApple =
     { row = 4, column = 8 }
 
+initialMalus: Bonus
+initialMalus =
+    { row = 7, column = 4, value = -1 }
+
 
 initialEatenApple : List Snake
 initialEatenApple =
@@ -76,7 +81,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 initialSnake Left initialApple initialEatenApple 0
+                Model False time time 0 initialSnake Left initialApple initialEatenApple initialMalus 0
                     |> Update.none
            )
 
@@ -101,6 +106,7 @@ type Msg
     | KeyDown Key
       --| NewApple
     | GetApple Snake
+    | GetBonus Bonus
 
 
 
@@ -124,6 +130,20 @@ generateApple =
     Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
 
 
+-- generateBonus : Int -> Random.Generator Bonus
+-- generateBonus value =
+--     Random.map2
+--         (\row column -> Bonus row column value)
+--         (Random.int 0 20)
+--         (Random.int 0 20)
+
+generateBonus : Random.Generator Bonus
+generateBonus  =
+    Random.map2
+        (\row column -> Bonus row column 1)
+        (Random.int 0 20)
+        (Random.int 0 20)
+
 
 -- newBonus : Cmd Msg
 -- newBonus =
@@ -142,13 +162,24 @@ updateSquare ({ coloredSquare } as model) =
         |> Setters.setColoredSquareIn model
 
 
-executdeAppleCmd : Model -> ( Model, Cmd Msg )
-executdeAppleCmd model =
-    --Random.generate GetApple generateApple
-    generateApple
-        |> Random.generate GetApple
-        |> flip Update.withCmd model
+-- executdeAppleCmd : Model -> ( Model, Cmd Msg )
+-- executdeAppleCmd model =
+    -- Random.generate GetApple generateApple
+--     generateApple
+--         |> Random.generate GetApple
+--         |> flip Update.withCmd model
 
+-- executdeBonusCmd : Model -> ( Model, Cmd Msg )
+-- executdeBonusCmd model =
+--     generateBonus
+--         |> Random.generate GetBonus
+--         |> flip Update.withCmd model
+
+cmdAggregator : Model -> ( Model, Cmd Msg )
+cmdAggregator model =
+    let appleCmd  = Random.generate GetApple generateApple in
+    let bonusCmd  = Random.generate GetBonus generateBonus in
+    Update.withCmds [appleCmd, bonusCmd] model
 
 updateApple : Snake -> Model -> Model
 updateApple value ({ coloredSquare } as model) =
@@ -164,6 +195,21 @@ updateApple value ({ coloredSquare } as model) =
 
     else if coloredSquare >= 20 then
         { model | apple = { row = -1, column = -1 } }
+
+    else
+        model
+
+updateBonus : Bonus -> Model -> Model
+updateBonus value ({ coloredSquare } as model) =
+    if coloredSquare == 0 then
+        let
+            newBonus =
+                value
+        in
+        { model | bonus = newBonus }
+
+    else if coloredSquare >= 20 then
+        { model | bonus = { row = -1, column = -1 , value = -1 } }
 
     else
         model
@@ -214,6 +260,22 @@ isAppleEaten apple ({ snake, eatenAppleList } as model) =
                     | eatenAppleList = newEatenApple
                     , apple = { row = -1, column = -1 }
                     , score = model.score + 1
+                }
+
+isBonusEaten : Bonus -> Model -> Model
+isBonusEaten bonus ({ snake } as model) =
+    case snake of
+        [] ->
+            model
+
+        hd :: _ ->
+            if hd.row /= bonus.row && hd.column /= bonus.column then
+                model
+
+            else
+                { model
+                    | bonus = { row = -1, column = -1, value = -1}
+                    , score = model.score + bonus.value
                 }
 
 
@@ -389,9 +451,9 @@ keyDown key model =
 -- _ ->
 --     Update.none model
 
-lauchDiceRoll : Model -> (Model, Cmd Msg)
-lauchDiceRoll model =
-  Update.withCmd newBonus model
+-- lauchDiceRoll : Model -> (Model, Cmd Msg)
+-- lauchDiceRoll model =
+--   Update.withCmd newBonus model
 
 nextFrame : Posix -> Model -> ( Model, Cmd Msg )
 nextFrame time model =
@@ -405,13 +467,16 @@ nextFrame time model =
             --|> updateApple
             --|> GetApple
             |> isAppleEaten model.apple
+            |> isBonusEaten model.bonus
             |> growthSnake
             |> updateSnake
             |> endGame
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
+            |> cmdAggregator
             --|> Update.none
-            |> executdeAppleCmd
+            -- |> executdeAppleCmd
+            -- |> executdeBonusCmd
 
     else
         time_
@@ -437,6 +502,9 @@ update msg model =
         --     ( model, Random.generate GetApple generateApple )
         GetApple value ->
             updateApple value model |> Update.none
+
+        GetBonus value ->
+            updateBonus value model |> Update.none
 
 
 
@@ -512,6 +580,30 @@ cell snake nameClass =
         ]
         []
 
+displayBonus : Bonus -> String -> Html msg
+displayBonus bonus nameClass =
+    let
+        depRow =
+            bonus.row
+                * 20
+                |> String.fromInt
+
+        depHeight =
+            bonus.column
+                * 20
+                |> String.fromInt
+    in
+    Html.div
+        [ {- Attributes.style "position" "absolute"
+             , Attributes.style "width" "20px"
+             , Attributes.style "height" "20px"
+          -}
+          Attributes.style "left" (depRow ++ "px")
+        , Attributes.style "top" (depHeight ++ "px")
+        , Attributes.class nameClass
+        ]
+        []
+
 
 movingSnake : Model -> List (Html msg)
 movingSnake { snake } =
@@ -546,6 +638,9 @@ movingSquare ({ apple } as model) =
             |> flip (::) (movingSnake model)
         )
 
+createBonus : Model -> Html msg
+createBonus ({ bonus } as model) =
+    Html.div [][displayBonus bonus "bonus"]
 
 actualTime : Model -> Html Msg
 actualTime { time } =
@@ -597,6 +692,7 @@ view model =
         [ Html.img [ Attributes.src "/logo.svg" ] []
         , explanations model
         , movingSquare model
+        , createBonus model
         , displayScore model
         ]
 
