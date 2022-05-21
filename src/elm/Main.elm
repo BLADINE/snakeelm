@@ -21,23 +21,27 @@ import Html exposing (select)
 type alias Flags =
     { now : Int }
 
+type alias ID = Int
+
+type alias Coordinate =
+    { row : Int, column : Int }
 
 type alias Snake =
     { row : Int, column : Int }
 
-
-type alias Apple =
-    { row : Int, column : Int, value : Int }
-
 type alias Bonus =
     { row : Int, column : Int, value : Int }
+
+type alias Bomb =
+    { id : ID, row : Int, column : Int }
 
 type alias Settings =
     { borderWall : Bool, randomWall : Bool, gridGame : Int}
 
 
 type alias Model =
-    { gameStarted : Bool
+    { id : ID
+    , gameStarted : Bool
     , lastUpdate : Int
     , time : Int
     , coloredSquare : Int
@@ -47,6 +51,7 @@ type alias Model =
     , eatenAppleList : List Snake
     , bonus : Bonus
     , score : Int
+    , bombs : List Bomb
     , settings : Settings
     }
 
@@ -76,6 +81,8 @@ initEatenApple : List Snake
 initEatenApple =
     []
 
+initBombs : List Bomb
+initBombs = []
 
 defaultSettings : Settings
 defaultSettings =
@@ -89,7 +96,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 initSnake Left initApple initEatenApple initialMalus 0 defaultSettings
+                Model 0 False time time 0 initSnake Left initApple initEatenApple initialMalus 0 initBombs defaultSettings
                     |> Update.none
            )
 
@@ -114,6 +121,7 @@ type Msg
     | ChoiceGrid String
     | GetApple Snake
     | GetBonus Bonus
+    | GetBomb Coordinate
 
 
 type Direction
@@ -134,7 +142,10 @@ type SettingGame
 -}
 generateApple : Random.Generator Snake
 generateApple =
-      Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
+      Random.map2
+        (\row column -> Snake row column)
+        (Random.int 0 20)
+        (Random.int 0 20)
 
 generateBonus : Random.Generator Bonus
 generateBonus  =
@@ -143,6 +154,12 @@ generateBonus  =
         (Random.int 0 20)
         (Random.int 0 20)
 
+generateCoordinate : Random.Generator Coordinate
+generateCoordinate =
+    Random.map2
+        (\row column -> Coordinate row column)
+        (Random.int 0 20)
+        (Random.int 0 20)
 
 -- newBonus : Cmd Msg
 -- newBonus =
@@ -176,9 +193,12 @@ updateSquare ({ coloredSquare } as model) =
 
 cmdAggregator : Model -> ( Model, Cmd Msg )
 cmdAggregator model =
-    let appleCmd  = Random.generate GetApple generateApple in
-    let bonusCmd  = Random.generate GetBonus generateBonus in
-    Update.withCmds [appleCmd, bonusCmd] model
+    let
+        appleCmd  = Random.generate GetApple generateApple
+        bonusCmd  = Random.generate GetBonus generateBonus
+        bombCmd  = Random.generate GetBomb generateCoordinate
+    in
+    Update.withCmds [appleCmd, bonusCmd, bombCmd] model
 
 updateApple : Snake -> Model -> Model
 updateApple value ({ coloredSquare } as model) =
@@ -212,6 +232,15 @@ updateBonus value ({ coloredSquare } as model) =
     else
         model
 
+updateBomb : Coordinate -> Model -> Model
+updateBomb coord ({ id, bombs, coloredSquare } as model) =
+    if coloredSquare == 0 then
+        let
+            newBomb = Bomb id coord.row coord.column
+        in
+        { model | bombs = (::) newBomb bombs, id = id + 1 }
+    else
+        model
 
 updateCell : Direction -> Snake -> Settings -> Snake
 updateCell direction snake settings=
@@ -546,6 +575,9 @@ update msg model =
         GetBonus value ->
             updateBonus value model |> Update.none
 
+        GetBomb coordinate ->
+            updateBomb coordinate model |> Update.none
+
         AddBorder value ->
             let
                 settings = setSettings Border value model.settings
@@ -578,7 +610,7 @@ checkBonusInSnake bonus listSnake =
 -}
 
 
-cell : Snake ->Int -> String -> Html msg
+cell : Snake -> Int -> String -> Html msg
 cell snake cellSize nameClass =
     let
         depRow =
@@ -602,22 +634,25 @@ cell snake cellSize nameClass =
         ]
         []
 
-displayBonus : Bonus -> String -> Html msg
-displayBonus bonus nameClass =
+displayBonus : Bonus -> Int -> String -> Html msg
+displayBonus bonus cellSize nameClass =
     let
         depRow =
             bonus.row
-                * 20
+                * cellSize
                 |> String.fromInt
 
         depHeight =
             bonus.column
-                * 20
+                * cellSize
                 |> String.fromInt
+
+        size = (String.fromInt cellSize) ++ "px"
     in
     Html.div
-        [
-          Attributes.style "left" (depRow ++ "px")
+        [ Attributes.style "width" size
+        , Attributes.style "height" size
+        , Attributes.style "left" (depRow ++ "px")
         , Attributes.style "top" (depHeight ++ "px")
         , Attributes.class nameClass
         ]
@@ -639,7 +674,7 @@ displayGameOver model =
 
 
 movingSquare : Model -> Html msg
-movingSquare ({ bonusApple, settings} as model) =
+movingSquare ({ bonusApple, settings, bonus} as model) =
     Html.div [ Attributes.class "grid" ]
         -- [ cell 1 coloredSquare
         -- , cell 1 coloredSquare
@@ -662,13 +697,17 @@ movingSquare ({ bonusApple, settings} as model) =
             movingSnake model
 
          else
-            cell bonusApple settings.gridGame "apple"
-                |> flip (::) (movingSnake model)
-        )
+            -- cell bonusApple settings.gridGame "apple"
+            --     |> flip (::) (movingSnake model)
+            let
+                htmlApple = cell bonusApple settings.gridGame "apple"
+                htmlBonus = displayBonus bonus settings.gridGame "bonus"
+            in
 
-createBonus : Model -> Html msg
-createBonus ({ bonus } as model) =
-    Html.div [][displayBonus bonus "bonus"]
+            (movingSnake model)
+                |> (::) htmlBonus
+                |> (::) htmlApple
+        )
 
 actualTime : Model -> Html Msg
 actualTime { time } =
@@ -753,7 +792,6 @@ view model =
         , wallCheckbox model
         , gridChoice model
         , movingSquare model
-        , createBonus model
         , displayScore model
         ]
 
