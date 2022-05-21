@@ -658,6 +658,10 @@ displayBonus bonus cellSize nameClass =
         ]
         []
 
+displayBombs : List Bomb -> Html msg
+displayBomb listBomb =
+    List.map (\bomb -> displayBonus ) listBomb
+
 
 movingSnake : Model -> List (Html msg)
 movingSnake { snake, settings} =
