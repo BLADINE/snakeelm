@@ -5,14 +5,15 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html, button, text)
-import Html.Attributes as Attributes
-import Html.Events as Events exposing (onClick)
+import Html exposing (Html, button, text, select, option, input)
+import Html.Attributes as Attributes exposing (checked, type_, value)
+import Html.Events as Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode
 import Random exposing (Generator)
 import Setters
 import Time exposing (Posix)
 import Update
+import Html exposing (select)
 
 
 {-| Got from JS side, and Model to modify
@@ -25,15 +26,14 @@ type alias Snake =
     { row : Int, column : Int }
 
 
+type alias Apple =
+    { row : Int, column : Int, value : Int }
+
 type alias Bonus =
     { row : Int, column : Int, value : Int }
 
-
-type Direction
-    = Left
-    | Up
-    | Right
-    | Down
+type alias Settings =
+    { borderWall : Bool, randomWall : Bool, gridGame : Int}
 
 
 type alias Model =
@@ -43,51 +43,56 @@ type alias Model =
     , coloredSquare : Int
     , snake : List Snake
     , currentDirection : Direction
-    , apple : Snake
+    , bonusApple : Snake
     , eatenAppleList : List Snake
     , bonus : Bonus
     , score : Int
-
-    -- , bonus : Bonus
+    , settings : Settings
     }
 
 
-initialSnake : List Snake
-initialSnake =
-    [ { row = 5, column = 5 }
+initSnake : List Snake
+initSnake =
+    [ --{ row = 0, column = 0 }
+        { row = 10, column = 5 }
 
     --bonusConstructor
-    -- , { row = 6, column = 5 }
+    --, { row = 11, column = 5 }
     -- , { row = 7, column = 5 }
     -- , { row = 8, column = 5 }
     ]
 
 
-initialApple : Snake
-initialApple =
-    { row = 4, column = 8 }
+initApple : Snake
+initApple =
+    { row = 5, column = 5 }
 
 initialMalus: Bonus
 initialMalus =
     { row = 7, column = 4, value = -1 }
 
 
-initialEatenApple : List Snake
-initialEatenApple =
+initEatenApple : List Snake
+initEatenApple =
     []
+
+
+defaultSettings : Settings
+defaultSettings =
+    { borderWall = False
+    , randomWall = False
+    , gridGame = 10
+    }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model False time time 0 initialSnake Left initialApple initialEatenApple initialMalus 0
+                Model False time time 0 initSnake Left initApple initEatenApple initialMalus 0 defaultSettings
                     |> Update.none
            )
 
-
-
--- [ { row = 5, column = 5 }, { row = 6, column = 5 } ]
 
 
 {-| All your messages should go there
@@ -104,18 +109,24 @@ type Msg
     = NextFrame Posix
     | ToggleGameLoop
     | KeyDown Key
-      --| NewApple
+    | AddBorder Bool
+    | AddRandomWall Bool
+    | ChoiceGrid String
     | GetApple Snake
     | GetBonus Bonus
 
 
+type Direction
+    = Left
+    | Up
+    | Right
+    | Down
 
--- | GenerateBonus
--- | NewBonus Snake
--- type IntOrSnake
---     = Int Int
---     | Snake { row : Int, column : Int }
 
+type SettingGame
+    = Border
+    | RandomWall
+    --| Grid
 
 {-| Manage all your updates here, from the main update function to each
 -| subfunction. You can use the helpers in Update.elm to help construct
@@ -123,19 +134,7 @@ type Msg
 -}
 generateApple : Random.Generator Snake
 generateApple =
-    -- Random.map2
-    --     (\row column -> Snake row column)
-    --     (Random.int 5 7)
-    --     (Random.int 5 7)
-    Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
-
-
--- generateBonus : Int -> Random.Generator Bonus
--- generateBonus value =
---     Random.map2
---         (\row column -> Bonus row column value)
---         (Random.int 0 20)
---         (Random.int 0 20)
+      Random.map2 (\row column -> Snake row column) (Random.int 0 20) (Random.int 0 20)
 
 generateBonus : Random.Generator Bonus
 generateBonus  =
@@ -185,16 +184,15 @@ updateApple : Snake -> Model -> Model
 updateApple value ({ coloredSquare } as model) =
     if coloredSquare == 0 then
         let
-            newApple =
-                value
+            newApple = value
 
             --{ row = 4, column = 8 }
             --randomApple
         in
-        { model | apple = newApple }
+        { model | bonusApple = newApple }
 
     else if coloredSquare >= 20 then
-        { model | apple = { row = -1, column = -1 } }
+        { model | bonusApple = { row = -1, column = -1 } }
 
     else
         model
@@ -215,26 +213,42 @@ updateBonus value ({ coloredSquare } as model) =
         model
 
 
-updateCell : Direction -> Snake -> Snake
-updateCell direction snake =
+updateCell : Direction -> Snake -> Settings -> Snake
+updateCell direction snake settings=
+    let outValue = toFloat(settings.gridGame)
+                            |> (/) 400.0
+                            |>floor
+            in
     case direction of
         Left ->
-            { snake
-                | row = snake.row - 1
-            }
+            if snake.row - 1 < 0 && not settings.borderWall then {snake | row = outValue - 1}
+
+            else
+                { snake
+                    | row = snake.row - 1
+                }
 
         Right ->
+            if snake.row + 1 > outValue - 1 && not settings.borderWall then {snake | row = 0}
+
+            else
             { snake
                 | row = snake.row + 1
             }
 
         Up ->
+            if snake.column - 1 < 0 && not settings.borderWall then {snake | column = outValue - 1}
+
+            else
             { snake
                 | column = snake.column - 1
             }
 
         --snake
         Down ->
+            if snake.column + 1 > outValue - 1 && not settings.borderWall then {snake | column = 0}
+
+            else
             { snake
                 | column = snake.column + 1
             }
@@ -258,8 +272,8 @@ isAppleEaten apple ({ snake, eatenAppleList } as model) =
                 in
                 { model
                     | eatenAppleList = newEatenApple
-                    , apple = { row = -1, column = -1 }
-                    , score = model.score + 1
+                    , bonusApple = { row = -1, column = -1 }
+                    , score = model.score + 100
                 }
 
 isBonusEaten : Bonus -> Model -> Model
@@ -309,22 +323,8 @@ growthSnake ({ snake, eatenAppleList } as model) =
 
 
 
--- let
---     newSnake =
---         if tl == [] then
---             List.singleton hd
---                 |> (::) hd
---         else
---             List.length snake
---                 - 1
---                 |> flip List.drop snake
---                 |> flip (++) snake
--- in
--- { model | snake = newSnake, apple = { row = -1, column = -1 } }
-
-
 updateSnake : Model -> Model
-updateSnake ({ snake, currentDirection } as model) =
+updateSnake ({ snake, currentDirection, score, settings} as model) =
     case snake of
         [] ->
             model
@@ -333,25 +333,17 @@ updateSnake ({ snake, currentDirection } as model) =
             let
                 newSnake =
                     if List.length snake == 1 then
-                        List.map (\a -> updateCell currentDirection a) snake
+                        List.map (\a -> updateCell currentDirection a settings) snake
 
                     else
                         List.length snake
                             - 1
                             |> flip List.take snake
-                            |> (::) (updateCell currentDirection hd)
+                            |> (::) (updateCell currentDirection hd settings)
 
-                -- newSnake2 =
-                --     List.length snake
-                --         - 1
-                --         |> flip List.take snake
-                --         |> (::) (updateCell currentDirection hd)
             in
-            -- if List.length snake == 1 then
-            --     { model | snake = newSnake1 }
-            -- else
-            --     { model | snake = newSnake2 }
-            { model | snake = newSnake }
+            { model | snake = newSnake, score = score + 3 }
+
 
 
 toggleGameLoop : Model -> ( Model, Cmd Msg )
@@ -361,50 +353,92 @@ toggleGameLoop ({ gameStarted } as model) =
         |> Update.none
 
 
+
 changeDirection : Direction -> Model -> Model
-changeDirection newDirection model =
-    -- case model.currentDirection of
-    --     Left -> if newDirection == Right then model
-    case model.currentDirection of
-        Left ->
-            if newDirection == Right then
-                model
+changeDirection newDirection ({ currentDirection, snake } as model) =
+    if List.length snake == 1 then
+        { model | currentDirection = newDirection }
+
+    else
+        case currentDirection of
+            Left ->
+                if newDirection == Right then
+                    model
+
+                else
+                    { model | currentDirection = newDirection }
+
+            Right ->
+                if newDirection == Left then
+                    model
+
+                else
+                    { model | currentDirection = newDirection }
+
+            Up ->
+                if newDirection == Down then
+                    model
+
+                else
+                    { model | currentDirection = newDirection }
+
+            Down ->
+                if newDirection == Up then
+                    model
+
+                else
+                    { model | currentDirection = newDirection }
+
+
+
+isSnakeHitBorder : Model -> Bool
+isSnakeHitBorder {snake, settings} =
+    case snake of
+        [] -> True
+        hd::_ ->
+            let outValue = toFloat(settings.gridGame)
+                            |> (/) 400.0
+                            |>floor
+            in
+            if hd.row == -1 || hd.row == outValue || hd.column == -1 || hd.column == outValue then
+                        True
+            else
+                False
+
+
+isSnakeHitSelf : Model -> Bool
+isSnakeHitSelf {snake} =
+    case snake of
+        [] -> True
+        hd::tail ->
+            if List.member hd tail then True
 
             else
-                { model | currentDirection = newDirection }
+                        False
 
-        Right ->
-            if newDirection == Left then
-                model
 
-            else
-                { model | currentDirection = newDirection }
-
-        Up ->
-            if newDirection == Down then
-                model
-
-            else
-                { model | currentDirection = newDirection }
-
-        Down ->
-            if newDirection == Up then
-                model
-
-            else
-                { model | currentDirection = newDirection }
+restModel : Model -> Model
+restModel model =
+    { model
+        | snake = initSnake
+        , gameStarted = False
+        , bonusApple = initApple
+        , eatenAppleList = []
+        , currentDirection = Left
+        , score = 0
+    }
 
 
 endGame : Model -> Model
-endGame ({ snake } as model) =
+endGame ({ snake, settings} as model) =
     let
-        isHitWallOrItself =
+        isSnakeHitSomething =
             case snake of
                 [] ->
                     True
 
                 hd :: tail ->
-                    if hd.row == -1 || hd.row == 20 || hd.column == -1 || hd.column == 20 then
+                    if isSnakeHitBorder model && settings.borderWall then
                         True
 
                     else if List.member hd tail then
@@ -413,18 +447,21 @@ endGame ({ snake } as model) =
                     else
                         False
     in
-    if isHitWallOrItself then
-        { model
-            | snake = initialSnake
-            , gameStarted = False
-            , apple = initialApple
-            , eatenAppleList = []
-            , currentDirection = Left
-            , score = 0
-        }
-
+    if isSnakeHitSomething then
+        restModel model
     else
         model
+
+
+gamePlay : Model -> Model
+gamePlay model =
+    updateSquare model
+        --|> updateApple
+        --|> GetApple
+        |> isAppleEaten model.bonusApple
+        |> growthSnake
+        |> updateSnake
+        |> endGame
 
 
 keyDown : Key -> Model -> ( Model, Cmd Msg )
@@ -447,14 +484,6 @@ keyDown key model =
             Update.none (changeDirection Down model)
 
 
-
--- _ ->
---     Update.none model
-
--- lauchDiceRoll : Model -> (Model, Cmd Msg)
--- lauchDiceRoll model =
---   Update.withCmd newBonus model
-
 nextFrame : Posix -> Model -> ( Model, Cmd Msg )
 nextFrame time model =
     let
@@ -466,11 +495,12 @@ nextFrame time model =
         updateSquare model
             --|> updateApple
             --|> GetApple
-            |> isAppleEaten model.apple
-            |> isBonusEaten model.bonus
-            |> growthSnake
             |> updateSnake
+            |> isAppleEaten model.bonusApple
+            |> isBonusEaten model.bonus
             |> endGame
+            |> growthSnake
+            --gamePlay model
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
             |> cmdAggregator
@@ -482,6 +512,18 @@ nextFrame time model =
         time_
             |> Setters.setTimeIn model
             |> Update.none
+
+
+setSettings : SettingGame -> Bool -> Settings-> Settings
+setSettings valuetype value settings=
+    case valuetype of
+        Border -> {settings | borderWall = value}
+        RandomWall -> {settings | randomWall = value}
+
+
+changeGrid : Int -> Settings-> Settings
+changeGrid value settings=
+    {settings | gridGame = value}
 
 
 {-| Main update function, mainly used as a router for subfunctions
@@ -498,33 +540,33 @@ update msg model =
         NextFrame time ->
             nextFrame time model
 
-        -- NewApple ->
-        --     ( model, Random.generate GetApple generateApple )
         GetApple value ->
             updateApple value model |> Update.none
 
         GetBonus value ->
             updateBonus value model |> Update.none
 
+        AddBorder value ->
+            let
+                settings = setSettings Border value model.settings
+            in
+            { model | settings = settings } |> Update.none
 
+        AddRandomWall value ->
+            let
+                settings = setSettings RandomWall value model.settings
+            in
+            { model | settings = settings} |> Update.none
 
---{ model | apple = value } |> Update.none
--- NewApple row column ->
---     model |> Update.none
-{- NewBonus generatedBonus ->
-       -- let
-       --     test =
-       --         { row = 5, column = 5 }
-       -- in
-       if checkBonusInSnake (Debug.log "generated bonus" generatedBonus) model.snake then
-           update GenerateBonus model
-
-       else
-           model |> Update.none
-
-   GenerateBonus ->
-       ( model, newBonus )
--}
+        ChoiceGrid value ->
+            let
+                setting =
+                    case String.toInt value of
+                        Nothing -> model.settings
+                        Just a -> changeGrid a model.settings
+            in
+            { model | settings = setting} |> Update.none
+            --model |> Update.none
 
 
 checkBonusInSnake : Snake -> List Snake -> Bool
@@ -536,45 +578,25 @@ checkBonusInSnake bonus listSnake =
 -}
 
 
-
--- transform : Snake -> Int
--- transform snakeElment =
---     --(snakeElment.row - 1) * 10 + snakeElment.column
---     0
--- cell : Int -> Int -> Html msg
--- cell index active =
---     let
---         class =
---             if active == index then
---                 "cell active"
---             else
---                 "cell"
---     in
---     Html.div [ Attributes.class class ] []
--- movingSnake : Model -> List (Html msg)
--- movingSnake model =
---     List.map (\a -> cell (transform a) model.coloredSquare) model.snake
-
-
-cell : Snake -> String -> Html msg
-cell snake nameClass =
+cell : Snake ->Int -> String -> Html msg
+cell snake cellSize nameClass =
     let
         depRow =
             snake.row
-                * 20
+                * cellSize
                 |> String.fromInt
 
         depHeight =
             snake.column
-                * 20
+                * cellSize
                 |> String.fromInt
+
+        size = (String.fromInt cellSize) ++ "px"
     in
     Html.div
-        [ {- Attributes.style "position" "absolute"
-             , Attributes.style "width" "20px"
-             , Attributes.style "height" "20px"
-          -}
-          Attributes.style "left" (depRow ++ "px")
+        [ Attributes.style "width" size
+        , Attributes.style "height" size
+        , Attributes.style "left" (depRow ++ "px")
         , Attributes.style "top" (depHeight ++ "px")
         , Attributes.class nameClass
         ]
@@ -594,10 +616,7 @@ displayBonus bonus nameClass =
                 |> String.fromInt
     in
     Html.div
-        [ {- Attributes.style "position" "absolute"
-             , Attributes.style "width" "20px"
-             , Attributes.style "height" "20px"
-          -}
+        [
           Attributes.style "left" (depRow ++ "px")
         , Attributes.style "top" (depHeight ++ "px")
         , Attributes.class nameClass
@@ -606,16 +625,21 @@ displayBonus bonus nameClass =
 
 
 movingSnake : Model -> List (Html msg)
-movingSnake { snake } =
-    List.map (\a -> cell a "snake") snake
+movingSnake { snake, settings} =
+    List.map (\a -> cell a settings.gridGame "snake") snake
 
 
-
--- Html.div [] value
+displayGameOver : Model -> Html msg
+displayGameOver model =
+    Html.div [ Attributes.class "game-over" ]
+        [ text "Game Over"
+        , Html.br [] []
+        , String.fromInt model.score |> text
+        ]
 
 
 movingSquare : Model -> Html msg
-movingSquare ({ apple } as model) =
+movingSquare ({ bonusApple, settings} as model) =
     Html.div [ Attributes.class "grid" ]
         -- [ cell 1 coloredSquare
         -- , cell 1 coloredSquare
@@ -634,8 +658,12 @@ movingSquare ({ apple } as model) =
         --(movingSnake model)
         -- if apple.row == -1 then cell apple "apple"
         -- else
-        (cell apple "apple"
-            |> flip (::) (movingSnake model)
+        (if bonusApple.row == -1 then
+            movingSnake model
+
+         else
+            cell bonusApple settings.gridGame "apple"
+                |> flip (::) (movingSnake model)
         )
 
 createBonus : Model -> Html msg
@@ -646,8 +674,6 @@ actualTime : Model -> Html Msg
 actualTime { time } =
     Html.div [ Attributes.class "actual-time" ]
         [ Html.text "Actual time"
-
-        --, button [ onClick GenerateBonus ] [ text "generate random" ]
         , time
             |> String.fromInt
             |> Html.text
@@ -676,6 +702,39 @@ explanations ({ gameStarted } as model) =
         ]
 
 
+wallCheckbox : Model -> Html Msg
+wallCheckbox { settings } =
+    Html.div []
+        [ text "Add wall border"
+        , Html.input [ onCheck AddBorder, type_ "checkbox", checked settings.borderWall ] []
+
+        , if settings.borderWall then
+            text "activated wall"
+
+          else
+            text "inactivated wall"
+        ]
+
+
+gridList : List Int
+gridList = [16,20,25,40]
+
+
+optionalList : Int -> Html Msg
+optionalList grid =
+    option[ value <|String.fromInt grid][text <|String.fromInt grid]
+
+gridChoice : Model -> Html Msg
+gridChoice model =
+    let options = List.map(\a -> optionalList a) gridList
+    in
+    Html.div[]
+        [ select[onInput ChoiceGrid]  options
+        , text <|String.fromInt model.settings.gridGame
+        ]
+
+
+
 displayScore : Model -> Html msg
 displayScore { score } =
     Html.div [ Attributes.class "score" ]
@@ -691,6 +750,8 @@ view model =
     Html.main_ []
         [ Html.img [ Attributes.src "/logo.svg" ] []
         , explanations model
+        , wallCheckbox model
+        , gridChoice model
         , movingSquare model
         , createBonus model
         , displayScore model
@@ -701,6 +762,8 @@ view model =
 -| requestAnimationFrame for the game loop. You don't have to bother with
 -| this.
 -}
+
+
 decodeArrow : String -> Decode.Decoder Key
 decodeArrow value =
     case value of
