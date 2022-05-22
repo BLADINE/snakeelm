@@ -80,6 +80,22 @@ img {
   border-radius: 100% ;
   border: 2px solid white;
 }
+.bonus {
+  width: 20px; /* same mesure with the column in the grid class*/
+  height: 20px;
+  position: absolute;
+  background-color: rgb(255, 42, 42);
+  border-radius: 100% ;
+  border: 2px solid white;
+}
+.bomb {
+  width: 20px; /* same mesure with the column in the grid class*/
+  height: 20px;
+  position: absolute;
+  background-color: orange;
+  border-radius: 100% ;
+  border: 2px solid white;
+}
 .score{
   min-width: 100px;
   min-height : 100px;
@@ -149,5 +165,3 @@ img {
   flex-direction: column;
   gap: 9px;
 }
-
-

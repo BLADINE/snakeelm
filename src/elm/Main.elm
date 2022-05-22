@@ -5,7 +5,7 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html, button, text, select, option, input)
+import Html exposing (Html, button, text, select, option, input, span)
 import Html.Attributes as Attributes exposing (checked, type_, value)
 import Html.Events as Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode
@@ -373,13 +373,24 @@ restModel model =
         , score = 0
     }
 
+sortedScores : Int -> Int -> Order
+sortedScores val1 val2 =
+    case compare val1 val2 of
+        GT -> LT
+        LT -> GT
+        EQ -> EQ
+        
+        
 
 updateScore : Int -> Model -> Model
 updateScore score ({hightScore} as model)=
     case hightScore of
         [] -> {model | hightScore = List.singleton score}
         _::_ -> --{model | hightScore = List.sort}
-            let scoreList = List.singleton score |> (++) hightScore
+            let scoreList = List.singleton score 
+                        |> (++) hightScore
+                        |> List.sortWith sortedScores 
+
             in
                 if List.length hightScore < 5 then 
                     {model | hightScore = scoreList}
@@ -668,16 +679,20 @@ gridChoice model =
         ]
 
 
-playerScore : HightScore -> Html Msg
+playerScore : (Int, Int) -> Html Msg
 playerScore value=
     --nameclass player-score
-    Html.div[Attributes.class "player-score"][text <|String.fromInt value]   
+    Html.div[Attributes.class "player-score"]
+        [ span[Attributes.style "boder-right" "1px solid black"][text <|String.fromInt <|Tuple.first value]
+        , span[][text <|String.fromInt <|Tuple.second value]
+        ]   
 
-
+--convertList : List Int -> List (Int)
 
 displayHighScore : Model -> Html Msg
 displayHighScore model =
-    let display =List.map(\a -> playerScore a) model.hightScore
+    let display = List.indexedMap Tuple.pair model.hightScore
+                |> List.map(\a -> playerScore a)
     in
     Html.div[Attributes.class "all-player-scores"] display
 
