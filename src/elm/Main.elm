@@ -363,23 +363,8 @@ isBombNotEaten bomb ({ snake } as model) =
             else
                 False
 
-                -- let
-                --     newEatenApple =
-                --         List.singleton apple
-                --             |> (++) eatenAppleList
-                -- in
-                -- { model
-                --     | eatenAppleList = newEatenApple
-                --     , bonusApple = { row = -1, column = -1 }
-                --     , score = model.score + 100
-                -- }
-
 checkBomb : List Bomb -> Model -> Model
 checkBomb bombList ({ snake, bombs } as model) =
-    -- case snake of
-    --     [] ->
-            -- Model
-        -- hd :: _ ->
     let
         newBombs = filter (\bomb -> isBombNotEaten bomb model) bombList
         shrinkedSnake =
