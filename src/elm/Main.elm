@@ -5,7 +5,7 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Functions exposing (flip)
-import Html exposing (Html, button, text, select, option, input)
+import Html exposing (Html, button, text, select, option, input, span)
 import Html.Attributes as Attributes exposing (checked, type_, value)
 import Html.Events as Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode
@@ -39,6 +39,8 @@ type alias Bomb =
 type alias Settings =
     { borderWall : Bool, randomWall : Bool, gridGame : Int}
 
+type alias HightScore = Int
+
 
 type alias Model =
     { id : ID
@@ -54,6 +56,8 @@ type alias Model =
     , score : Int
     , bombs : List Bomb
     , settings : Settings
+    , hightScore : List HightScore
+    -- , bonus : Bonus
     }
 
 
@@ -100,7 +104,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model 0 False time time 0 initSnake Left initApple initEatenApple initialMalus 0 initBombs defaultSettings
+                Model 0 False time time 0 initSnake Left initApple initEatenApple initialMalus 0 initBombs defaultSettings [10,13,15]
                     |> Update.none
            )
 
@@ -126,7 +130,6 @@ type Msg
     | GetBonus Bonus
     | GetBomb Coordinate
 
-
 type Direction
     = Left
     | Up
@@ -145,29 +148,38 @@ type SettingGame
 -| Cmds.
 -}
 
+-- generateApple : Random.Generator Snake
+-- generateApple =
+--       Random.map2
+--         (\row column -> Snake row column)
+--         (Random.int 0 20)
+--         (Random.int 0 20)
 
-generateApple : Random.Generator Snake
-generateApple =
-      Random.map2
-        (\row column -> Snake row column)
-        (Random.int 0 20)
-        (Random.int 0 20)
 
-
-generateBonus : Random.Generator Bonus
-generateBonus  =
+generateBonus : Settings -> Random.Generator Bonus
+generateBonus settings =
+     let outValue = toFloat(settings.gridGame)
+                            |> (/) 400.0
+                            |>floor
+                            |> flip (-) 1
+    in
     Random.map2
         (\row column -> Bonus row column -100)
         (Random.int 0 20)
         (Random.int 0 20)
 
 
-generateCoordinate : Model -> Random.Generator Coordinate
-generateCoordinate model =
+generateCoordinate : Settings -> Random.Generator Coordinate
+generateCoordinate settings =
+     let outValue = toFloat(settings.gridGame)
+                            |> (/) 400.0
+                            |>floor
+                            |> flip (-) 1
+    in
     Random.map2
         (\row column -> Coordinate row column)
-        (Random.int 0 20)
-        (Random.int 0 20)
+        (Random.int 0 outValue)
+        (Random.int 0 outValue)
 
 -- newBonus : Cmd Msg
 -- newBonus =
@@ -176,6 +188,15 @@ generateCoordinate model =
 -- updateBonus bonus random =
 --     { bonus | row = random, column = random }
 
+generateApple : Settings -> Random.Generator Snake
+generateApple settings =
+     let outValue = toFloat(settings.gridGame)
+                            |> (/) 400.0
+                            |>floor
+                            |> flip (-) 1
+    in
+    --Random.map2 (\row column -> Snake row column) (Random.int 0 19) (Random.int 0 19)
+    Random.map2 (\row column -> Snake row column) (Random.int 0 outValue) (Random.int 0 outValue)
 
 updateSquare : Model -> Model
 updateSquare ({ coloredSquare } as model) =
@@ -186,12 +207,12 @@ updateSquare ({ coloredSquare } as model) =
         |> Setters.setColoredSquareIn model
 
 
--- executdeAppleCmd : Model -> ( Model, Cmd Msg )
--- executdeAppleCmd model =
-    -- Random.generate GetApple generateApple
---     generateApple
---         |> Random.generate GetApple
---         |> flip Update.withCmd model
+executdeAppleCmd : Model -> ( Model, Cmd Msg )
+executdeAppleCmd model =
+    --Random.generate GetApple generateApple
+    generateApple model.settings
+        |> Random.generate GetApple
+        |> flip Update.withCmd model
 
 -- executdeBonusCmd : Model -> ( Model, Cmd Msg )
 -- executdeBonusCmd model =
@@ -203,9 +224,9 @@ updateSquare ({ coloredSquare } as model) =
 cmdAggregator : Model -> ( Model, Cmd Msg )
 cmdAggregator model =
     let
-        appleCmd  = Random.generate GetApple generateApple
-        bonusCmd  = Random.generate GetBonus generateBonus
-        bombCmd  = Random.generate GetBomb (generateCoordinate model)
+        appleCmd  = Random.generate GetApple (generateApple model.settings)
+        bonusCmd  = Random.generate GetBonus (generateBonus model.settings)
+        bombCmd  = Random.generate GetBomb (generateCoordinate model.settings)
     in
     Update.withCmds [appleCmd, bonusCmd, bombCmd] model
 
@@ -511,6 +532,30 @@ restModel model =
         , score = 0
     }
 
+sortedScores : Int -> Int -> Order
+sortedScores val1 val2 =
+    case compare val1 val2 of
+        GT -> LT
+        LT -> GT
+        EQ -> EQ
+
+
+
+updateScore : Int -> Model -> Model
+updateScore score ({hightScore} as model)=
+    case hightScore of
+        [] -> {model | hightScore = List.singleton score}
+        _::_ -> --{model | hightScore = List.sort}
+            let scoreList = List.singleton score
+                        |> (++) hightScore
+                        |> List.sortWith sortedScores
+
+            in
+                if List.length hightScore < 5 then
+                    {model | hightScore = scoreList}
+                else
+                    model
+
 
 endGame : Model -> Model
 endGame ({ snake, settings} as model) =
@@ -531,7 +576,7 @@ endGame ({ snake, settings} as model) =
                         False
     in
     if isSnakeHitSomething then
-        restModel model
+        updateScore model.score model|> restModel
     else
         model
 
@@ -587,10 +632,8 @@ nextFrame time model =
             --gamePlay model
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
-            |> cmdAggregator
             --|> Update.none
-            -- |> executdeAppleCmd
-            -- |> executdeBonusCmd
+            |> executdeAppleCmd
 
     else
         time_
@@ -637,13 +680,17 @@ update msg model =
             let
                 settings = setSettings Border value model.settings
             in
-            { model | settings = settings } |> Update.none
+            { model | settings = settings }
+            |> restModel
+            |> Update.none
 
         AddRandomWall value ->
             let
                 settings = setSettings RandomWall value model.settings
             in
-            { model | settings = settings} |> Update.none
+            { model | settings = settings}
+            |> restModel
+            |> Update.none
 
         ChoiceGrid value ->
             let
@@ -652,7 +699,9 @@ update msg model =
                         Nothing -> model.settings
                         Just a -> changeGrid a model.settings
             in
-            { model | settings = setting} |> Update.none
+            { model | settings = setting}
+            |> restModel
+            |> Update.none
             --model |> Update.none
 
 
@@ -665,7 +714,7 @@ checkBonusInSnake bonus listSnake =
 -}
 
 
-cell : Snake -> Int -> String -> Html msg
+cell : Snake ->Int -> String -> Html msg
 cell snake cellSize nameClass =
     let
         depRow =
@@ -805,6 +854,7 @@ movingSquare ({ bonusApple, settings, bonus, bombs} as model) =
                 |> List.append htmlBomb
         )
 
+
 actualTime : Model -> Html Msg
 actualTime { time } =
     Html.div [ Attributes.class "actual-time" ]
@@ -870,6 +920,23 @@ gridChoice model =
         ]
 
 
+playerScore : (Int, Int) -> Html Msg
+playerScore value=
+    --nameclass player-score
+    Html.div[Attributes.class "player-score"]
+        [ span[Attributes.style "boder-right" "1px solid black"][text <|String.fromInt <|Tuple.first value]
+        , span[][text <|String.fromInt <|Tuple.second value]
+        ]
+
+--convertList : List Int -> List (Int)
+
+displayHighScore : Model -> Html Msg
+displayHighScore model =
+    let display = List.indexedMap Tuple.pair model.hightScore
+                |> List.map(\a -> playerScore a)
+    in
+    Html.div[Attributes.class "all-player-scores"] display
+
 displayScore : Model -> Html msg
 displayScore { score } =
     Html.div [ Attributes.class "score" ]
@@ -889,6 +956,7 @@ view model =
         , gridChoice model
         , movingSquare model
         , displayScore model
+        , displayHighScore model
         ]
 
 
