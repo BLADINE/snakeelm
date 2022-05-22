@@ -92,9 +92,14 @@ img {
   width: 20px; /* same mesure with the column in the grid class*/
   height: 20px;
   position: absolute;
-  background-color: orange;
-  border-radius: 100% ;
-  border: 2px solid white;
+  /* background-color: black; */
+  background: url(../asset/snakeBomb.webp);
+  /* background-size: 20px 20px; */
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* border-radius: 100% ; */
+  /* border: 2px solid white; */
 }
 .score{
   min-width: 100px;
