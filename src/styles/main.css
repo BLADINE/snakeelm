@@ -91,6 +91,27 @@ img {
   text-align: center;
   border: solid 2px black;
 }
+
+.all-player-scores{
+  min-width: 100px;
+  min-height: 100px;
+  display: flex;
+  justify-content: flex-start;
+  flex-direction: column;
+  position: relative;
+  left: 400px;
+  top: -350px;
+  border : dashed 2px rgb(7, 125, 169);
+}
+.player-score {
+  min-width: 200px;
+  min-height: 30px;
+  background-color: rgb(133, 191, 191);
+  font-size: 20px;
+  text-align: center;
+  border-bottom: solid 2px black; 
+}
+
 .active {
   background: #bbb;
 }
