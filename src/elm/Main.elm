@@ -899,7 +899,7 @@ playerScore : (Int, Int) -> Html Msg
 playerScore value=
     --nameclass player-score
     Html.div[Attributes.class "player-score"]
-        [ span[Attributes.style "boder-right" "1px solid black"][text <|String.fromInt <|Tuple.first value]
+        [ span[ Attributes.class "each-score" ][text <|String.fromInt <|Tuple.first value]
         , span[][text <|String.fromInt <|Tuple.second value]
         ]
 

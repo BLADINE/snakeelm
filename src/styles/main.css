@@ -128,11 +128,16 @@ img {
   min-width: 200px;
   min-height: 30px;
   background-color: rgb(133, 191, 191);
+  padding:0 5px ;
   font-size: 20px;
-  text-align: center;
-  border-bottom: solid 2px black; 
+  border-bottom: solid 2px black;
 }
-
+.each-score{
+  width: 30px;
+  border-right: 1px solid black;
+  margin-right: 4px;
+  /* padding-right: 4px; */
+}
 .active {
   background: #bbb;
 }
