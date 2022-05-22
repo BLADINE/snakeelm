@@ -104,7 +104,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { now } =
     now
         |> (\time ->
-                Model 0 False time time 0 initSnake Left initApple initEatenApple initialMalus 0 initBombs defaultSettings [10,13,15]
+                Model 0 False time time 0 initSnake Left initApple initEatenApple initialMalus 0 initBombs defaultSettings []
                     |> Update.none
            )
 
@@ -148,13 +148,6 @@ type SettingGame
 -| Cmds.
 -}
 
--- generateApple : Random.Generator Snake
--- generateApple =
---       Random.map2
---         (\row column -> Snake row column)
---         (Random.int 0 20)
---         (Random.int 0 20)
-
 
 generateBonus : Settings -> Random.Generator Bonus
 generateBonus settings =
@@ -195,7 +188,6 @@ generateApple settings =
                             |>floor
                             |> flip (-) 1
     in
-    --Random.map2 (\row column -> Snake row column) (Random.int 0 19) (Random.int 0 19)
     Random.map2 (\row column -> Snake row column) (Random.int 0 outValue) (Random.int 0 outValue)
 
 updateSquare : Model -> Model
@@ -633,7 +625,8 @@ nextFrame time model =
             |> Setters.setTime time_
             |> Setters.setLastUpdate time_
             --|> Update.none
-            |> executdeAppleCmd
+            -- |> executdeAppleCmd
+            |> cmdAggregator
 
     else
         time_
@@ -811,25 +804,7 @@ displayGameOver model =
 movingSquare : Model -> Html msg
 movingSquare ({ bonusApple, settings, bonus, bombs} as model) =
     Html.div [ Attributes.class "grid" ]
-        -- [ cell 1 coloredSquare
-        -- , cell 1 coloredSquare
-        -- , cell 2 coloredSquare
-        -- , cell 3 coloredSquare
-        -- , cell 4 coloredSquare
-        -- , cell 5 coloredSquare
-        -- , cell 6 coloredSquare
-        -- , cell 7 coloredSquare
-        -- , cell 8 coloredSquare
-        -- , cell 9 coloredSquare
-        -- ]
-        -- [ cellSnake { row = 1, column = 5 }
-        -- , cell 0 coloredSquare
-        -- ]
-        --(movingSnake model)
-        -- if apple.row == -1 then cell apple "apple"
-        -- else
         (if bonusApple.row == -1 then
-            -- movingSnake model
             let
                 htmlBonus = displayBonus bonus settings.gridGame "bonus"
                 htmlBomb = displayBomb bombs model
